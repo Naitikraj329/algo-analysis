@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sort Race Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#170B14; --panel:#20121D; --grid:#2A1725; --line:#3D2436;
+  --amber:#FF4FA8; --amber-d:#C72E80; --teal:#FF8FCB; --teal-d:#C85590;
+  --red:#FF3D5E; --red-d:#B01F3D; --sorted:#B36CFF; --sorted-d:#7A3FCC;
+  --gold:#FFD166; --gold-d:#C99A3A; --div:#6FE3FF; --violet:#8B6CFF;
+  --text:#FBE7F3; --muted:#C98FB0; --glass:rgba(34,18,31,.68);
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;}
+html{scroll-padding-top:env(safe-area-inset-top,0px);}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;position:relative;
+  background-image:radial-gradient(circle at 15% 0%, #35152B 0%, var(--bg) 55%),
+    linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:auto,26px 26px,26px 26px;}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.55;
+  background-image:
+    radial-gradient(circle, rgba(255,255,255,.55) 1px, transparent 1.6px),
+    radial-gradient(circle, rgba(255,143,203,.45) 1px, transparent 1.6px),
+    radial-gradient(circle, rgba(111,227,255,.35) 1px, transparent 1.6px),
+    radial-gradient(circle, rgba(255,209,102,.4) 1px, transparent 1.6px);
+  background-size:170px 170px, 230px 230px, 290px 290px, 340px 340px;
+  background-position:0 0, 70px 100px, 150px 40px, 40px 220px;
+  animation:glitterDrift 22s linear infinite;}
+@keyframes glitterDrift{0%{background-position:0 0, 70px 100px, 150px 40px, 40px 220px;}100%{background-position:170px 170px, -160px 330px, -140px 330px, -300px -120px;}}
+header,.controls,#customRow,main{position:relative;z-index:1;}
+header{padding:26px 30px 16px;border-bottom:1px solid var(--line);}
+header h1{margin:0;font-size:1.6rem;font-weight:800;letter-spacing:-0.02em;
+  background:linear-gradient(100deg, var(--teal), var(--gold) 30%, var(--violet) 60%, var(--teal) 100%);
+  background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
+  animation:titleShimmer 7s linear infinite;}
+@keyframes titleShimmer{0%{background-position:0% 50%;}100%{background-position:300% 50%;}}
+header p{margin:4px 0 0;color:var(--muted);font-size:.85rem;font-family:'JetBrains Mono',monospace;}
+
+.controls{display:flex;gap:18px;align-items:flex-end;flex-wrap:wrap;padding:18px 30px;border-bottom:1px solid var(--line);
+  background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06);}
+.field label{display:block;font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--muted);margin-bottom:6px;}
+input[type=range]{accent-color:var(--amber);width:140px;}
+.rangeval{color:var(--amber);font-family:'JetBrains Mono',monospace;}
+button{position:relative;overflow:hidden;font-family:'JetBrains Mono',monospace;font-size:.78rem;padding:10px 15px;
+  background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:4px;cursor:pointer;}
+button::before{content:'';position:absolute;top:0;left:-60%;width:35%;height:100%;
+  background:linear-gradient(120deg, transparent, rgba(255,255,255,.4), transparent);
+  transform:skewX(-20deg);transition:left .5s ease;}
+button:hover:not(:disabled)::before{left:130%;}
+button:hover:not(:disabled){border-color:var(--amber);}
+button.primary{background:var(--amber);color:#2B0A1C;border-color:var(--amber);font-weight:700;}
+button:disabled{opacity:.35;cursor:not-allowed;}
+button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-offset:2px;}
+
+main{padding:24px 30px 40px;display:flex;flex-direction:column;gap:22px;}
+h2{font-size:.78rem;font-family:'JetBrains Mono',monospace;color:var(--muted);margin:0 0 10px;font-weight:500;
+  border-left:2px solid var(--violet);padding-left:9px;}
+
+.stage{background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:6px;padding:16px;height:150px;
+  display:flex;align-items:flex-end;gap:2px;box-shadow:inset 0 1px 0 rgba(255,255,255,.06), 0 10px 30px -14px rgba(0,0,0,.6);}
+
+/* 3D bar look: glossy gradient body + carved shadow + top highlight, shared by all bars */
+.bar{flex:1;min-width:2px;position:relative;border-radius:3px 3px 1px 1px;
+  background:linear-gradient(155deg,#FFD3EC 0%, var(--teal) 45%, var(--teal-d) 100%);
+  box-shadow:inset -3px 0 5px rgba(0,0,0,.35), inset 2px 0 3px rgba(255,255,255,.2), 0 4px 10px -3px rgba(255,79,168,.35);
+  transition:background .12s;}
+.bar::after{content:'';position:absolute;top:0;left:0;right:0;height:35%;border-radius:3px 3px 0 0;
+  background:linear-gradient(180deg, rgba(255,255,255,.45), rgba(255,255,255,0));}
+.bar.compare{background:linear-gradient(155deg,#FFC2E6 0%, var(--amber) 45%, var(--amber-d) 100%);animation:glowPulse .5s ease-in-out infinite;}
+.bar.swap{background:linear-gradient(155deg,#FFB3C0 0%, var(--red) 45%, var(--red-d) 100%);animation:glowPulse .35s ease-in-out infinite;}
+.bar.sorted{background:linear-gradient(155deg,#E3CBFF 0%, var(--sorted) 45%, var(--sorted-d) 100%);}
+.bar.dim{opacity:.22;}
+.bar.pivot{outline:2px solid var(--div);outline-offset:-2px;z-index:2;box-shadow:0 0 10px var(--div);}
+@keyframes glowPulse{0%,100%{filter:brightness(1) saturate(1);}50%{filter:brightness(1.35) saturate(1.3);}}
+
+.progress{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:-2px;}
+.progress-fill{position:relative;height:100%;width:0%;background:linear-gradient(90deg,var(--teal),var(--sorted));
+  transition:width .15s;overflow:hidden;}
+.progress-fill::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);
+  background-size:200% 100%;animation:shimmerMove 1.6s linear infinite;}
+@keyframes shimmerMove{0%{background-position:200% 0;}100%{background-position:-200% 0;}}
+
+.grid4{display:flex;flex-direction:column;gap:16px;}
+
+.card{background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:12px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05), 0 12px 28px -18px rgba(0,0,0,.7);transition:transform .2s, border-color .2s;}
+.card:hover{transform:translateY(-2px);border-color:var(--violet);}
+.card .name{font-weight:700;font-size:.95rem;display:flex;align-items:center;gap:8px;}
+.card .name .tag{font-family:'JetBrains Mono',monospace;font-size:.62rem;color:var(--muted);font-weight:400;}
+.card.done{border-color:var(--sorted);}
+.card.done .name .tag{color:var(--sorted);}
+.card.winner{border-color:var(--gold);animation:winnerGlow 1.6s ease-in-out infinite;}
+@keyframes winnerGlow{0%,100%{box-shadow:0 0 0 1px var(--gold),0 0 16px -4px var(--gold);}50%{box-shadow:0 0 0 1px var(--gold),0 0 30px -2px var(--gold);}}
+
+.body{display:flex;gap:12px;flex-wrap:wrap;}
+.mini-wrap{flex:1 1 220px;display:flex;flex-direction:column;gap:6px;min-width:200px;}
+.mini{height:130px;display:flex;align-items:flex-end;gap:1px;border-bottom:1px solid var(--line);}
+.mini .bar{border-radius:2px 2px 1px 1px;}
+
+.codebox{flex:1 1 240px;min-width:220px;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:8px 10px;
+  font-family:'JetBrains Mono',monospace;font-size:.7rem;color:var(--muted);height:130px;overflow-y:auto;}
+.codebox .ln{padding:2px 6px;border-radius:3px;white-space:pre;}
+.codebox .ln.active{background:rgba(255,79,168,.2);color:var(--amber);font-weight:700;}
+
+.log{flex:1 1 240px;min-width:220px;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:6px 8px;
+  font-family:'JetBrains Mono',monospace;font-size:.63rem;color:var(--muted);
+  height:130px;overflow-y:auto;display:flex;flex-direction:column-reverse;}
+.log div{padding:2px 0;border-bottom:1px dashed rgba(255,255,255,.04);}
+.log div.c{color:var(--amber);}
+.log div.s{color:var(--red);}
+.log div.k{color:var(--sorted);}
+.log div.d{color:var(--div);}
+
+.statrow{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:.72rem;border-top:1px solid var(--line);padding-top:10px;}
+.statrow div span{display:block;color:var(--muted);font-size:.63rem;}
+.statrow div b{color:var(--amber);font-size:.92rem;}
+
+.bottom{display:grid;grid-template-columns:1.3fr 1fr;gap:18px;}
+@media (max-width:860px){.bottom{grid-template-columns:1fr;}}
+table{width:100%;border-collapse:collapse;font-family:'JetBrains Mono',monospace;font-size:.76rem;}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);}
+th{color:var(--muted);font-weight:500;font-size:.66rem;}
+td.win{color:var(--gold);font-weight:700;}
+
+.timechart{background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;align-items:flex-end;gap:16px;height:170px;}
+.tbar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end;}
+
+.metricchart{background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);
+  border-radius:6px;padding:16px 16px 14px;display:flex;align-items:flex-end;gap:14px;height:200px;}
+.mgroup{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end;}
+.mbars{display:flex;gap:4px;align-items:flex-end;height:100%;}
+.mbar{width:16px;border-radius:3px 3px 1px 1px;min-height:2px;box-shadow:0 3px 8px -3px rgba(0,0,0,.5);}
+.mbar.cmp{background:linear-gradient(155deg,#FFC2E6,var(--amber) 45%,var(--amber-d));}
+.mbar.swp{background:linear-gradient(155deg,#FFB3C0,var(--red) 45%,var(--red-d));}
+.mlbl{font-family:'JetBrains Mono',monospace;font-size:.62rem;color:var(--muted);text-align:center;line-height:1.5;}
+.tbar{width:60%;border-radius:3px 3px 1px 1px;min-height:2px;
+  background:linear-gradient(155deg,#FFC2E6,var(--amber) 45%,var(--amber-d));
+  box-shadow:inset -3px 0 5px rgba(0,0,0,.3), 0 4px 8px -3px rgba(0,0,0,.5);}
+.tbar.win{background:linear-gradient(155deg,#FFEBB0,var(--gold) 45%,var(--gold-d));box-shadow:0 0 12px -2px var(--gold);}
+.tbar-wrap .lbl{font-family:'JetBrains Mono',monospace;font-size:.64rem;color:var(--muted);text-align:center;}
+
+.legend{display:flex;gap:16px;font-family:'JetBrains Mono',monospace;font-size:.7rem;color:var(--muted);flex-wrap:wrap;}
+.legend span{display:inline-flex;align-items:center;gap:6px;}
+.dot{width:9px;height:9px;border-radius:2px;display:inline-block;}
+
+.confetti{position:fixed;top:-20px;width:8px;height:14px;border-radius:2px;pointer-events:none;z-index:999;
+  animation-name:confettiFall;animation-timing-function:linear;animation-fill-mode:forwards;}
+@keyframes confettiFall{0%{transform:translateY(0) rotate(0deg);opacity:1;}100%{transform:translateY(110vh) rotate(420deg);opacity:0;}}
+
+.valbox{width:50px;padding:8px 4px;text-align:center;background:var(--bg);color:var(--text);border:1px solid var(--line);
+  border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:.78rem;}
+.valbox:focus-visible{outline:2px solid var(--amber);outline-offset:1px;}
+
+.sparkle{position:fixed;pointer-events:none;z-index:1000;font-size:18px;animation:sparkleTwinkle 1.3s ease-out forwards;}
+@keyframes sparkleTwinkle{0%{transform:scale(0) rotate(0deg);opacity:0;}30%{transform:scale(1.3) rotate(90deg);opacity:1;}100%{transform:scale(.3) rotate(200deg) translateY(-40px);opacity:0;}}
+
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--gold);
+  color:var(--text);padding:10px 18px;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:.78rem;
+  z-index:1001;box-shadow:0 10px 24px -10px rgba(0,0,0,.6);animation:toastPop .25s ease-out;}
+@keyframes toastPop{0%{opacity:0;transform:translateX(-50%) translateY(10px);}100%{opacity:1;transform:translateX(-50%) translateY(0);}}
+.opwrap{flex:1 1 220px;min-width:200px;display:flex;flex-direction:column;gap:6px;}
+.opwrap .gt{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:.6rem;color:var(--muted);}
+.opcanvas{width:100%;height:108px;display:block;background:var(--bg);border:1px solid var(--line);border-radius:4px;}
+.graphs{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;}
+.graphcard{background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:6px;padding:14px 14px 10px;display:flex;flex-direction:column;gap:8px;box-shadow:inset 0 1px 0 rgba(255,255,255,.05), 0 12px 28px -18px rgba(0,0,0,.7);}
+.graphcard .gt{font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--muted);}
+.graphcard canvas{width:100%;height:210px;display:block;}
+.mgroup .mbars{flex:1;min-height:0;}
+/* ===== visual refresh ===== */
+:root{--r:16px;}
+header{padding:36px 34px 24px;background:linear-gradient(180deg,rgba(255,79,168,.12),transparent);}
+header h1{font-size:2.2rem;}
+header p{font-size:.9rem;}
+.controls{padding:18px 34px;gap:16px;}
+select,input[type=number]{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:9px 10px;font-family:'JetBrains Mono',monospace;font-size:.78rem;}
+button{border-radius:999px;padding:10px 18px;transition:transform .15s,box-shadow .15s,border-color .15s;}
+button:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 18px -8px var(--amber);}
+button.primary{background:linear-gradient(135deg,#FF7BC0,#C72E80);border-color:transparent;color:#fff;box-shadow:0 8px 22px -8px rgba(255,79,168,.8);}
+main{padding:30px 34px 60px;gap:36px;}
+h2{display:flex;align-items:center;gap:10px;border-left:none;padding-left:0;margin-bottom:14px;font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text);}
+h2::before{content:'';flex:none;width:10px;height:10px;border-radius:3px;background:linear-gradient(135deg,var(--teal),var(--violet));box-shadow:0 0 12px var(--violet);}
+h2::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--line),transparent);}
+.stage,.card,.timechart,.metricchart,.graphcard{border-radius:var(--r);}
+.card{--ac:var(--teal);border-top:3px solid var(--ac);padding:18px;position:relative;}
+.card::before{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:radial-gradient(120% 60% at 0% 0%,color-mix(in srgb,var(--ac) 14%,transparent),transparent 60%);}
+.card:hover{box-shadow:0 18px 40px -20px var(--ac);border-color:var(--ac);}
+.card .name{font-size:1.05rem;}
+.card .name::before{content:'';width:10px;height:10px;border-radius:50%;background:var(--ac);box-shadow:0 0 10px var(--ac);}
+.statrow{border-top:none;padding-top:0;gap:8px;}
+.statrow div{flex:1;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:10px;padding:8px 10px;}
+.statrow div b{color:var(--ac);font-size:1.05rem;}
+.progress{height:8px;border-radius:99px;margin-top:0;}
+.progress-fill{background:linear-gradient(90deg,var(--ac),var(--sorted));}
+.codebox,.log,.opcanvas,.mini{border-radius:10px;}
+.graphcard{padding:16px 16px 12px;transition:border-color .2s,transform .2s;}
+.graphcard:hover,.metricchart:hover,.timechart:hover{border-color:var(--violet);}
+.graphcard .gt{display:flex;align-items:center;gap:8px;color:var(--text);font-weight:700;letter-spacing:.06em;}
+.graphcard .gt::before{content:'';width:3px;height:14px;border-radius:2px;background:linear-gradient(var(--teal),var(--violet));}
+.metricchart{padding:20px;gap:22px;height:240px;}
+.mbar{width:22px;border-radius:7px 7px 2px 2px;transition:height .25s;}
+.mbar.cmp{box-shadow:0 0 16px -4px var(--amber);}
+.mbar.swp{box-shadow:0 0 16px -4px var(--red);}
+.mlbl{font-size:.7rem;color:var(--text);}
+.mlbl span{color:var(--muted);}
+table{border-collapse:separate;border-spacing:0;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--glass);}
+th{background:rgba(255,255,255,.04);text-transform:uppercase;letter-spacing:.06em;}
+tbody tr:hover td{background:rgba(255,79,168,.08);}
+tbody tr:last-child td{border-bottom:none;}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;}
+.kpi{position:relative;overflow:hidden;background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;}
+.kpi::after{content:'';position:absolute;right:-30px;top:-30px;width:100px;height:100px;border-radius:50%;background:var(--kc);opacity:.22;filter:blur(20px);}
+.kpi .kl{font-family:'JetBrains Mono',monospace;font-size:.62rem;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;}
+.kpi .kv{font-size:1.6rem;font-weight:800;margin:6px 0 2px;color:var(--kc);}
+.kpi .ks{font-family:'JetBrains Mono',monospace;font-size:.7rem;color:var(--muted);}
+</style>
+</head>
+<body>
+<header>
+  <h1>Sort Race Dashboard</h1>
+  <p>five algorithms, the same array — step through every comparison or let them race</p>
+</header>
+
+<div class="controls">
+  <div class="field"><label for="source">Array source</label>
+    <select id="source"><option value="random">Random</option><option value="custom">I'll enter the numbers</option></select>
+  </div>
+  <div id="randomFields" style="display:contents">
+    <div class="field"><label for="size">Array size — <span class="rangeval" id="sizeval">24</span></label><input type="range" id="size" min="8" max="50" value="24"></div>
+    <div class="field"><button id="gen">New array</button></div>
+  </div>
+  <div id="customFields" style="display:none;gap:18px;align-items:flex-end;">
+    <div class="field"><label for="count">How many numbers? (4–40)</label><input type="number" id="count" min="4" max="40" value="10" style="width:90px"></div>
+    <div class="field"><button id="makeFields">Enter values</button></div>
+  </div>
+  <div class="field"><label for="speed">Speed — <span class="rangeval" id="speedval">5</span></label><input type="range" id="speed" min="1" max="10" value="5"></div>
+  <div class="field"><button id="step">Step ▶</button></div>
+  <div class="field"><button id="play" class="primary">Play</button></div>
+  <div class="field"><button id="reset" disabled>Reset</button></div>
+  <div class="field"><button id="sound">🔊 Sound</button></div>
+  <div class="field" style="margin-left:auto"><div class="legend">
+    <span><i class="dot" style="background:#FF8FCB"></i>unsorted</span>
+    <span><i class="dot" style="background:#FF4FA8"></i>comparing</span>
+    <span><i class="dot" style="background:#FF3D5E"></i>swapping</span>
+    <span><i class="dot" style="background:#B36CFF"></i>sorted</span>
+    <span><i class="dot" style="background:#6FE3FF"></i>division / pivot</span>
+    <span><i class="dot" style="background:#FFD166"></i>🏆 winner</span>
+  </div></div>
+</div>
+<div id="customRow" style="display:none;padding:14px 30px;border-bottom:1px solid var(--line);background:var(--glass);backdrop-filter:blur(14px);">
+  <div id="valueInputs" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+  <div class="btnrow" style="margin-top:10px;"><button id="buildArray" class="primary">Build array</button></div>
+</div>
+<div style="position:relative;z-index:1;padding:8px 30px;font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--muted);border-bottom:1px solid var(--line);background:var(--glass);backdrop-filter:blur(14px)">
+  ⌨ <b style="color:var(--text)">space</b> play/pause · <b style="color:var(--text)">→</b> step · <b style="color:var(--text)">n</b> new array
+</div>
+
+<main>
+  <section>
+    <h2>ORIGINAL ARRAY</h2>
+    <div class="stage" id="stage"></div>
+  </section>
+
+  <section>
+    <h2>RACE — chart, live pseudocode (active line highlighted), and comparison log for each algorithm</h2>
+    <div class="grid4" id="cards"></div>
+  </section>
+
+  <section><h2>RACE HIGHLIGHTS</h2><div class="kpis" id="kpis"></div></section>
+
+  <section class="bottom">
+    <div>
+      <h2>PERFORMANCE COMPARISON</h2>
+      <table>
+        <thead><tr><th>Algorithm</th><th>Time</th><th>Comparisons</th><th>Swaps</th><th>Avg complexity</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div>
+      <h2>EXECUTION TIME</h2>
+      <div class="timechart" id="timechart"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>ALL SORTS COMPARED — comparisons (pink) vs swaps (red), same array</h2>
+    <div class="metricchart" id="metricchart"></div>
+  </section>
+
+  <section>
+    <h2>OPERATIONS OVER TIME — cumulative growth per step, all algorithms</h2>
+    <div class="graphs">
+      <div class="graphcard"><div class="gt">COMPARISONS vs STEPS</div><canvas id="cmpGraph"></canvas></div>
+      <div class="graphcard"><div class="gt">SWAPS / WRITES vs STEPS</div><canvas id="swpGraph"></canvas></div>
+      <div class="graphcard"><div class="gt">% SORTED vs STEPS</div><canvas id="pctGraph"></canvas></div>
+    </div>
+    <div class="legend" style="margin-top:12px">
+      <span><i class="dot" style="background:#FF4FA8"></i>Bubble</span>
+      <span><i class="dot" style="background:#FF9A4D"></i>Selection</span>
+      <span><i class="dot" style="background:#6FE3FF"></i>Insertion</span>
+      <span><i class="dot" style="background:#B36CFF"></i>Quick</span>
+      <span><i class="dot" style="background:#7CFFB2"></i>Merge</span>
+    </div>
+  </section>
+</main>
+
+<script>
+const ALGOS = [
+  {key:'bubble', name:'Bubble Sort', complexity:'O(n²)'},
+  {key:'selection', name:'Selection Sort', complexity:'O(n²)'},
+  {key:'insertion', name:'Insertion Sort', complexity:'O(n²)'},
+  {key:'quick', name:'Quick Sort', complexity:'O(n log n)', divides:true},
+  {key:'merge', name:'Merge Sort', complexity:'O(n log n)', divides:true},
+];
+
+const ALGO_COLOR={bubble:'#FF4FA8',selection:'#FF9A4D',insertion:'#6FE3FF',quick:'#B36CFF',merge:'#7CFFB2'};
+
+const CODE = {
+  bubble:[
+    'for i in 0..n-2',
+    '  for j in 0..n-2-i',
+    '    if a[j] > a[j+1]',
+    '      swap a[j], a[j+1]',
+    '  mark index sorted'
+  ],
+  selection:[
+    'for i in 0..n-2',
+    '  min = i',
+    '  for j in i+1..n-1',
+    '    if a[j] < a[min]: min = j',
+    '  swap a[i], a[min]'
+  ],
+  insertion:[
+    'for i in 1..n-1',
+    '  key = a[i]; j = i-1',
+    '  while j>=0 and a[j] > key',
+    '    a[j+1] = a[j]; j--',
+    '  a[j+1] = key'
+  ],
+  quick:[
+    'partition(lo, hi):',
+    '  pivot = a[hi]; i = lo-1',
+    '  for j in lo..hi-1',
+    '    if a[j] < pivot: swap a[i],a[j]; i++',
+    '  swap a[i+1], a[hi]',
+    '  recurse(lo,i); recurse(i+2,hi)'
+  ],
+  merge:[
+    'mergeSort(lo, hi):',
+    '  mid = floor((lo+hi)/2)',
+    '  compare left[i] vs right[j]',
+    '  write a[k] = smaller one',
+    '  mark range sorted'
+  ],
+};
+
+function* bubbleGen(a){
+  let n=a.length, swapped;
+  for(let i=0;i<n-1;i++){
+    swapped=false;
+    for(let j=0;j<n-1-i;j++){
+      yield{type:'compare',idx:[j,j+1],a:a[j],b:a[j+1],line:2};
+      if(a[j]>a[j+1]){ [a[j],a[j+1]]=[a[j+1],a[j]]; yield{type:'swap',idx:[j,j+1],line:3}; swapped=true; }
+    }
+    yield{type:'sorted',idx:[n-1-i],line:4};
+    if(!swapped){ for(let k=0;k<n-1-i;k++) yield{type:'sorted',idx:[k],line:4}; break; }
+  }
+  yield{type:'sorted',idx:[0],line:4}; yield{type:'done'};
+}
+function* selectionGen(a){
+  let n=a.length;
+  for(let i=0;i<n-1;i++){
+    let min=i;
+    for(let j=i+1;j<n;j++){ yield{type:'compare',idx:[j,min],a:a[j],b:a[min],line:3}; if(a[j]<a[min]) min=j; }
+    if(min!==i){ [a[i],a[min]]=[a[min],a[i]]; yield{type:'swap',idx:[i,min],line:4}; }
+    yield{type:'sorted',idx:[i],line:4};
+  }
+  yield{type:'sorted',idx:[n-1],line:4}; yield{type:'done'};
+}
+function* insertionGen(a){
+  let n=a.length;
+  for(let i=1;i<n;i++){
+    let key=a[i], j=i-1;
+    while(j>=0){
+      yield{type:'compare',idx:[j,j+1],a:a[j],b:key,line:2};
+      if(a[j]>key){ a[j+1]=a[j]; yield{type:'swap',idx:[j+1],line:3}; j--; } else break;
+    }
+    a[j+1]=key; yield{type:'swap',idx:[j+1],line:4};
+    yield{type:'sorted',idx:[i],line:4};
+  }
+  yield{type:'done'};
+}
+function* quickStep(a,lo,hi){
+  if(lo<hi){
+    let pivot=a[hi], i=lo-1;
+    yield{type:'divide', lo, hi, pivotIdx:hi, pivotVal:pivot, line:0};
+    for(let j=lo;j<hi;j++){
+      yield{type:'compare',idx:[j,hi],a:a[j],b:pivot,line:3};
+      if(a[j]<pivot){ i++; [a[i],a[j]]=[a[j],a[i]]; yield{type:'swap',idx:[i,j],line:3}; }
+    }
+    [a[i+1],a[hi]]=[a[hi],a[i+1]]; yield{type:'swap',idx:[i+1,hi],line:4}; yield{type:'sorted',idx:[i+1],line:5};
+    yield* quickStep(a,lo,i); yield* quickStep(a,i+2,hi);
+  } else if(lo===hi){ yield{type:'sorted',idx:[lo],line:5}; }
+}
+function* quickGen(a){ yield* quickStep(a,0,a.length-1); yield{type:'done'}; }
+
+function* mergeStep(a, lo, hi){
+  if(lo>=hi){ yield{type:'sorted', idx:[lo], line:4}; return; }
+  const mid=Math.floor((lo+hi)/2);
+  yield{type:'divide', lo, hi, pivotIdx:mid, pivotVal:a[mid], line:0};
+  yield* mergeStep(a, lo, mid);
+  yield* mergeStep(a, mid+1, hi);
+  let left=a.slice(lo,mid+1), right=a.slice(mid+1,hi+1);
+  let i=0,j=0,k=lo;
+  while(i<left.length && j<right.length){
+    yield{type:'compare', idx:[lo+i, mid+1+j], a:left[i], b:right[j], line:2};
+    if(left[i]<=right[j]){ a[k]=left[i]; yield{type:'swap', idx:[k], line:3}; i++; }
+    else{ a[k]=right[j]; yield{type:'swap', idx:[k], line:3}; j++; }
+    k++;
+  }
+  while(i<left.length){ a[k]=left[i]; yield{type:'swap', idx:[k], line:3}; i++; k++; }
+  while(j<right.length){ a[k]=right[j]; yield{type:'swap', idx:[k], line:3}; j++; k++; }
+  for(let x=lo;x<=hi;x++) yield{type:'sorted', idx:[x], line:4};
+}
+function* mergeGen(a){ yield* mergeStep(a,0,a.length-1); yield{type:'done'}; }
+
+const GEN = {bubble:bubbleGen, selection:selectionGen, insertion:insertionGen, quick:quickGen, merge:mergeGen};
+
+const sizeIn=document.getElementById('size'), speedIn=document.getElementById('speed');
+const sizeval=document.getElementById('sizeval'), speedval=document.getElementById('speedval');
+const stage=document.getElementById('stage'), cardsEl=document.getElementById('cards');
+const genBtn=document.getElementById('gen'), stepBtn=document.getElementById('step'),
+      playBtn=document.getElementById('play'), resetBtn=document.getElementById('reset');
+const tbody=document.getElementById('tbody'), timechart=document.getElementById('timechart');
+const sourceSel=document.getElementById('source'), randomFields=document.getElementById('randomFields'),
+      customFields=document.getElementById('customFields'), customRow=document.getElementById('customRow'),
+      countIn=document.getElementById('count'), makeFieldsBtn=document.getElementById('makeFields'),
+      valueInputs=document.getElementById('valueInputs'), buildArrayBtn=document.getElementById('buildArray'),
+      soundBtn=document.getElementById('sound'), metricchart=document.getElementById('metricchart');
+
+let baseArr=[], minVal=0, maxVal=100, panels=[], tickHandle=null, racing=false, started=false;
+
+function toHeight(v){ return ((v-minVal)/(maxVal-minVal))*84+10; }
+function genArray(n){ let a=[]; for(let i=0;i<n;i++) a.push(Math.floor(Math.random()*94)+6); return a; }
+
+function buildOriginalStage(){
+  stage.innerHTML='';
+  baseArr.forEach(v=>{ const b=document.createElement('div'); b.className='bar'; b.style.height=toHeight(v)+'%'; stage.appendChild(b); });
+}
+
+function buildCards(){
+  cardsEl.innerHTML=''; panels=[];
+  ALGOS.forEach(a=>{
+    const card=document.createElement('div'); card.className='card'; card.style.setProperty('--ac',ALGO_COLOR[a.key]);
+    card.innerHTML=`<div class="name">${a.name} <span class="tag">${a.complexity}</span>${a.divides?' <span class="tag" style="color:var(--div)">divide &amp; conquer</span>':''}</div>
+      <div class="body">
+        <div class="mini-wrap"><div class="mini" id="mini-${a.key}"></div></div>
+        <div class="opwrap"><div class="gt"><span>OPS vs STEPS</span><span><span style="color:#FF4FA8">■</span> cmp &nbsp;<span style="color:#FF3D5E">■</span> swp</span></div><canvas class="opcanvas"></canvas></div>
+        <div class="codebox" id="code-${a.key}"></div>
+        <div class="log" id="log-${a.key}"></div>
+      </div>
+      <div class="statrow">
+        <div><span>CMP</span><b id="cmp-${a.key}">0</b></div>
+        <div><span>SWP</span><b id="swp-${a.key}">0</b></div>
+        <div><span>TIME</span><b id="time-${a.key}">0ms</b></div>
+        <div><span>DONE</span><b id="pct-${a.key}">0%</b></div>
+      </div>
+      <div class="progress"><div class="progress-fill" id="prog-${a.key}"></div></div>`;
+    cardsEl.appendChild(card);
+    const codeEl=card.querySelector('.codebox');
+    const codeLines = CODE[a.key].map((ln,idx)=>{
+      const d=document.createElement('div'); d.className='ln'; d.textContent=ln; codeEl.appendChild(d); return d;
+    });
+    const mini=card.querySelector('.mini');
+    const arr=baseArr.slice();
+    const bars=arr.map(v=>{ const b=document.createElement('div'); b.className='bar'; b.style.height=toHeight(v)+'%'; mini.appendChild(b); return b; });
+    panels.push({key:a.key, name:a.name, complexity:a.complexity, card, arr, bars, codeLines,
+      cmp:0, swp:0, done:false, startTime:0, elapsed:0, gen:null, steps:0, pct:0, hist:[[0,0,0,0]], opCanvas:card.querySelector('.opcanvas'),
+      cmpEl:card.querySelector(`#cmp-${a.key}`), swpEl:card.querySelector(`#swp-${a.key}`),
+      timeEl:card.querySelector(`#time-${a.key}`), logEl:card.querySelector(`#log-${a.key}`),
+      pctEl:card.querySelector(`#pct-${a.key}`), progEl:card.querySelector(`#prog-${a.key}`)});
+  });
+  tbody.innerHTML=''; timechart.innerHTML='';
+  buildMetric(); drawAll();
+}
+
+function applyBaseArr(){
+  minVal = Math.min(...baseArr); maxVal = Math.max(...baseArr);
+  if(minVal===maxVal){minVal-=1;maxVal+=1;}
+  buildOriginalStage(); buildCards();
+  started=false; playBtn.textContent='Play'; playBtn.disabled=false; stepBtn.disabled=false;
+  sizeIn.disabled=false; genBtn.disabled=false; resetBtn.disabled=true;
+}
+
+function newArray(){
+  pauseRace();
+  baseArr = genArray(Number(sizeIn.value));
+  applyBaseArr();
+}
+
+function makeValueFields(){
+  const n=Math.max(4, Math.min(40, Number(countIn.value)||10));
+  countIn.value=n;
+  valueInputs.innerHTML='';
+  for(let i=0;i<n;i++){
+    const inp=document.createElement('input');
+    inp.type='number'; inp.className='valbox'; inp.placeholder='#'+(i+1);
+    valueInputs.appendChild(inp);
+  }
+  customRow.style.display='block';
+}
+
+function buildCustomArray(){
+  pauseRace();
+  const boxes=[...valueInputs.querySelectorAll('.valbox')];
+  const vals=boxes.map(b=>b.value.trim());
+  if(boxes.length===0 || vals.some(v=>v===''||isNaN(Number(v)))){
+    boxes.forEach(b=>{ if(b.value.trim()===''||isNaN(Number(b.value))) b.style.borderColor='var(--red)'; });
+    showToast('fill in every box with a number first');
+    return;
+  }
+  boxes.forEach(b=>b.style.borderColor='');
+  baseArr=vals.map(Number);
+  applyBaseArr();
+  showToast(`array built — n=${baseArr.length}`);
+}
+
+sourceSel.addEventListener('change', ()=>{
+  const custom=sourceSel.value==='custom';
+  randomFields.style.display=custom?'none':'contents';
+  customFields.style.display=custom?'flex':'none';
+  customRow.style.display=custom && valueInputs.children.length ? 'block':'none';
+  if(custom && valueInputs.children.length===0) makeValueFields();
+});
+makeFieldsBtn.addEventListener('click', makeValueFields);
+buildArrayBtn.addEventListener('click', buildCustomArray);
+
+function showToast(msg){
+  const t=document.createElement('div'); t.className='toast'; t.textContent=msg;
+  document.body.appendChild(t); setTimeout(()=>t.remove(), 1800);
+}
+
+let soundOn=true, audioCtx=null;
+function ensureAudio(){ if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)(); if(audioCtx.state==='suspended') audioCtx.resume(); }
+function beep(freq, dur, type, vol){
+  if(!soundOn) return;
+  try{
+    ensureAudio();
+    const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+    o.type=type; o.frequency.value=freq; g.gain.value=vol;
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime+dur);
+    o.stop(audioCtx.currentTime+dur);
+  }catch(e){}
+}
+soundBtn.addEventListener('click', ()=>{ soundOn=!soundOn; soundBtn.textContent=soundOn?'🔊 Sound':'🔇 Sound'; });
+
+function clearActive(p){ p.bars.forEach(b=>{ if(!b.classList.contains('sorted')) b.classList.remove('compare','swap'); }); }
+
+function logLine(p, cls, text){
+  const d=document.createElement('div'); d.className=cls; d.textContent=text;
+  p.logEl.appendChild(d);
+  while(p.logEl.children.length>60) p.logEl.removeChild(p.logEl.firstChild);
+}
+
+function highlightLine(p, line){
+  if(line==null) return;
+  p.codeLines.forEach((el,idx)=>el.classList.toggle('active', idx===line));
+}
+
+function applyStep(p, val){
+  p.steps++;
+  highlightLine(p, val.line);
+  if(val.type==='compare'){
+    p.cmp++; val.idx.forEach(i=>p.bars[i] && p.bars[i].classList.add('compare'));
+    logLine(p,'c', `compare  a[${val.idx[0]}]=${val.a}  vs  a[${val.idx[1]}]=${val.b}`);
+    beep(320+(val.a||0)*2.2, 0.035, 'sine', 0.025);
+  } else if(val.type==='swap'){
+    p.swp++; val.idx.forEach(i=>{ if(p.bars[i]){ p.bars[i].style.height=toHeight(p.arr[i])+'%'; p.bars[i].classList.add('swap'); }});
+    logLine(p,'s', `swap     index ${val.idx.join(' ↔ ')}`);
+    beep(180, 0.05, 'square', 0.03);
+  } else if(val.type==='sorted'){
+    val.idx.forEach(i=>{ if(p.bars[i]) p.bars[i].classList.add('sorted'); });
+    logLine(p,'k', `locked   index ${val.idx.join(', ')}`);
+  } else if(val.type==='divide'){
+    p.bars.forEach((b,idx)=>{
+      if(idx<val.lo || idx>val.hi){ if(!b.classList.contains('sorted')) b.classList.add('dim'); }
+      else b.classList.remove('dim');
+      b.classList.remove('pivot');
+    });
+    if(p.bars[val.pivotIdx]) p.bars[val.pivotIdx].classList.add('pivot');
+    logLine(p,'d', `divide   range [${val.lo}..${val.hi}]  mark a[${val.pivotIdx}]=${val.pivotVal}`);
+    beep(520, 0.07, 'triangle', 0.025);
+  }
+}
+
+function finishPanel(p){
+  p.done=true; p.elapsed=performance.now()-p.startTime;
+  p.card.classList.add('done'); p.bars.forEach(b=>b.classList.add('sorted'));
+  p.bars.forEach(b=>b.classList.remove('dim','pivot'));
+  p.codeLines.forEach(el=>el.classList.remove('active'));
+  logLine(p,'k','— sorted —');
+  checkAllDone();
+}
+function checkAllDone(){ if(panels.every(p=>p.done)) endRace(); }
+
+function updateProgress(p){
+  const sorted=p.bars.filter(b=>b.classList.contains('sorted')).length;
+  const pct=Math.round((sorted/p.bars.length)*100);
+  p.progEl.style.width=pct+'%'; p.pctEl.textContent=pct+'%';
+  p.pct=pct; p.hist.push([p.steps,p.cmp,p.swp,pct]);
+}
+
+function ensureStarted(){
+  if(started) return;
+  started=true;
+  panels.forEach(p=>{ p.gen=GEN[p.key](p.arr); p.startTime=performance.now(); });
+  resetBtn.disabled=false;
+}
+
+function stepAll(){
+  ensureStarted();
+  panels.forEach(p=>{
+    if(p.done) return;
+    clearActive(p);
+    const r=p.gen.next();
+    if(r.done) finishPanel(p); else applyStep(p, r.value);
+    p.cmpEl.textContent=p.cmp; p.swpEl.textContent=p.swp;
+    p.timeEl.textContent=Math.round(performance.now()-p.startTime)+'ms';
+    updateProgress(p);
+  });
+  drawAll();
+}
+
+function tick(){
+  const steps=Math.max(1, Math.round(Number(speedIn.value)*1.4));
+  panels.forEach(p=>{
+    if(p.done) return;
+    clearActive(p);
+    for(let s=0;s<steps;s++){
+      const r=p.gen.next();
+      if(r.done){ finishPanel(p); break; }
+      applyStep(p, r.value);
+    }
+    p.cmpEl.textContent=p.cmp; p.swpEl.textContent=p.swp;
+    p.timeEl.textContent=Math.round(performance.now()-p.startTime)+'ms';
+    updateProgress(p);
+  });
+  drawAll();
+}
+
+function playRace(){
+  ensureStarted();
+  if(racing || panels.every(p=>p.done)) return;
+  racing=true; playBtn.textContent='Pause'; stepBtn.disabled=true; sizeIn.disabled=true; genBtn.disabled=true;
+  tickHandle=setInterval(tick, 45);
+}
+function pauseRace(){
+  if(tickHandle) clearInterval(tickHandle);
+  racing=false; playBtn.textContent='Play'; if(started){ stepBtn.disabled=panels.every(p=>p.done); }
+}
+
+function endRace(){
+  pauseRace(); playBtn.disabled=true; stepBtn.disabled=true; genBtn.disabled=false; sizeIn.disabled=false;
+  const rows=panels.slice().sort((a,b)=>a.elapsed-b.elapsed);
+  const fastest=rows[0];
+  tbody.innerHTML=panels.map(p=>`<tr><td>${p.name}</td><td class="${p===fastest?'win':''}">${Math.round(p.elapsed)}ms</td><td>${p.cmp}</td><td>${p.swp}</td><td>${p.complexity}</td></tr>`).join('');
+  const maxTime=Math.max(...panels.map(p=>p.elapsed),1);
+  timechart.innerHTML=panels.map(p=>{
+    const h=Math.max(4,(p.elapsed/maxTime)*100);
+    return `<div class="tbar-wrap"><div class="tbar${p===fastest?' win':''}" style="height:${h}%"></div><div class="lbl">${p.name.replace(' Sort','')}<br>${Math.round(p.elapsed)}ms</div></div>`;
+  }).join('');
+  renderKpis();
+  fastest.card.classList.add('winner');
+  fastest.card.querySelector('.name').insertAdjacentHTML('afterbegin','🏆 ');
+  fireConfetti();
+  fireSparkles(fastest.card);
+  [660,880,1040].forEach((f,i)=>setTimeout(()=>beep(f,0.18,'triangle',0.035), i*140));
+  showToast(`🏆 ${fastest.name} wins in ${Math.round(fastest.elapsed)}ms!`);
+}
+
+function fireSparkles(cardEl){
+  const rect=cardEl.getBoundingClientRect();
+  for(let i=0;i<20;i++){
+    const s=document.createElement('div'); s.className='sparkle';
+    s.textContent=Math.random()>0.5?'✨':'⭐';
+    s.style.left=(rect.left+Math.random()*rect.width)+'px';
+    s.style.top=(rect.top+Math.random()*rect.height)+'px';
+    s.style.animationDelay=(Math.random()*0.5)+'s';
+    document.body.appendChild(s);
+    setTimeout(()=>s.remove(), 2000);
+  }
+}
+
+function fireConfetti(){
+  const colors=['#FF4FA8','#FFD166','#B36CFF','#6FE3FF','#FF8FCB'];
+  for(let i=0;i<46;i++){
+    const d=document.createElement('div'); d.className='confetti';
+    d.style.left=Math.random()*100+'vw';
+    d.style.background=colors[Math.floor(Math.random()*colors.length)];
+    d.style.animationDuration=(1.8+Math.random()*1.6)+'s';
+    d.style.animationDelay=(Math.random()*0.3)+'s';
+    document.body.appendChild(d);
+    setTimeout(()=>d.remove(), 4000);
+  }
+}
+
+function niceCeil(v){ if(v<=1) return 1; const m=Math.pow(10,Math.floor(Math.log10(v))), f=v/m; return (f<=1?1:f<=2?2:f<=5?5:10)*m; }
+function fmt(n){ return n>=1000 ? (n/1000).toFixed(n>=10000?0:1).replace('.0','')+'k' : String(Math.round(n)); }
+
+function drawChart(cv, series, o={}){
+  const w=cv.clientWidth, h=cv.clientHeight; if(!w||!h) return;
+  const dpr=window.devicePixelRatio||1;
+  if(cv.width!==Math.round(w*dpr)||cv.height!==Math.round(h*dpr)){ cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr); }
+  const c=cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0); c.clearRect(0,0,w,h);
+  const L=o.small?30:38, R=10, T=8, B=o.small?14:20, pw=w-L-R, ph=h-T-B;
+  let mx=1,my=0;
+  series.forEach(s=>s.pts.forEach(q=>{ if(q[0]>mx) mx=q[0]; if(q[1]>my) my=q[1]; }));
+  my=o.maxY||niceCeil(my);
+  const X=x=>L+x/mx*pw, Y=y=>T+ph-y/my*ph;
+  c.font='10px JetBrains Mono, monospace'; c.fillStyle='#C98FB0'; c.strokeStyle='#3D2436'; c.lineWidth=1;
+  c.textAlign='right'; c.textBaseline='middle'; c.setLineDash([3,4]);
+  for(let i=0;i<=2;i++){ const y=T+ph-i/2*ph; c.beginPath(); c.moveTo(L,y); c.lineTo(L+pw,y); c.stroke(); c.fillText(fmt(my*i/2)+(o.pct?'%':''),L-5,y); }
+  c.textBaseline='top'; c.textAlign='left'; c.fillText('0',L,T+ph+3);
+  c.textAlign='right'; c.fillText(fmt(mx)+' steps',L+pw,T+ph+3);
+  c.setLineDash([]);
+  series.forEach(s=>{
+    if(s.pts.length<2) return;
+    c.beginPath(); s.pts.forEach((q,i)=>i?c.lineTo(X(q[0]),Y(q[1])):c.moveTo(X(q[0]),Y(q[1])));
+    c.strokeStyle=s.color; c.lineWidth=2.4; c.lineJoin='round'; c.lineCap='round'; c.shadowColor=s.color; c.shadowBlur=10; c.stroke(); c.shadowBlur=0;
+    const last=s.pts[s.pts.length-1];
+    c.lineTo(X(last[0]),Y(0)); c.lineTo(X(0),Y(0)); c.closePath();
+    const gr=c.createLinearGradient(0,T,0,T+ph); gr.addColorStop(0,s.color+'55'); gr.addColorStop(1,s.color+'00'); c.fillStyle=gr; c.fill();
+    c.beginPath(); c.arc(X(last[0]),Y(last[1]),3.5,0,6.283); c.fillStyle=s.color; c.shadowColor=s.color; c.shadowBlur=12; c.fill(); c.shadowBlur=0;
+  });
+}
+
+function kpiTile(l,v,sub,c){ return `<div class="kpi" style="--kc:${c}"><div class="kl">${l}</div><div class="kv">${v}</div><div class="ks">${sub}</div></div>`; }
+function renderKpis(){
+  const el=document.getElementById('kpis');
+  if(!panels.every(p=>p.done)){
+    el.innerHTML=[['Fastest','#FFD166'],['Fewest comparisons','#FF4FA8'],['Fewest swaps','#FF3D5E'],['Array size','#6FE3FF']].map(k=>kpiTile(k[0],'—','run the race to see',k[1])).join('');
+    return;
+  }
+  const best=f=>panels.reduce((a,b)=>f(b)<f(a)?b:a), nm=p=>p.name.replace(' Sort','');
+  const t=best(p=>p.elapsed), c=best(p=>p.cmp), w=best(p=>p.swp);
+  el.innerHTML=kpiTile('🏆 Fastest',nm(t),Math.round(t.elapsed)+'ms','#FFD166')+kpiTile('Fewest comparisons',nm(c),c.cmp+' comparisons','#FF4FA8')+kpiTile('Fewest swaps',nm(w),w.swp+' swaps / writes','#FF3D5E')+kpiTile('Array size',baseArr.length,'elements sorted','#6FE3FF');
+}
+function buildMetric(){
+  renderKpis();
+  metricchart.innerHTML=panels.map(p=>`<div class="mgroup"><div class="mbars"><div class="mbar cmp" id="mc-${p.key}"></div><div class="mbar swp" id="ms-${p.key}"></div></div><div class="mlbl">${p.name.replace(' Sort','')}<br><span id="mv-${p.key}">0 / 0</span></div></div>`).join('');
+}
+function updateMetric(){
+  const m=Math.max(1,...panels.map(p=>Math.max(p.cmp,p.swp)));
+  panels.forEach(p=>{
+    document.getElementById('mc-'+p.key).style.height=Math.max(1,p.cmp/m*100)+'%';
+    document.getElementById('ms-'+p.key).style.height=Math.max(1,p.swp/m*100)+'%';
+    document.getElementById('mv-'+p.key).textContent=p.cmp+' / '+p.swp;
+  });
+}
+
+function drawAll(){
+  panels.forEach(p=>drawChart(p.opCanvas,[
+    {pts:p.hist.map(h=>[h[0],h[1]]),color:'#FF4FA8'},
+    {pts:p.hist.map(h=>[h[0],h[2]]),color:'#FF3D5E'}],{small:true}));
+  const g=(id,i,o)=>drawChart(document.getElementById(id),panels.map(p=>({pts:p.hist.map(h=>[h[0],h[i]]),color:ALGO_COLOR[p.key]})),o);
+  g('cmpGraph',1,{}); g('swpGraph',2,{}); g('pctGraph',3,{maxY:100,pct:true});
+  updateMetric();
+}
+window.addEventListener('resize', drawAll);
+
+window.addEventListener('keydown', e=>{
+  if(e.code==='Space'){ e.preventDefault(); if(!playBtn.disabled) (racing?pauseRace():playRace()); }
+  else if(e.code==='ArrowRight'){ if(!stepBtn.disabled) stepAll(); }
+  else if(e.key==='n'||e.key==='N'){ if(!genBtn.disabled) newArray(); }
+});
+
+sizeIn.addEventListener('input', ()=>{ sizeval.textContent=sizeIn.value; if(!started) newArray(); });
+speedIn.addEventListener('input', ()=>{ speedval.textContent=speedIn.value; });
+genBtn.addEventListener('click', newArray);
+stepBtn.addEventListener('click', stepAll);
+playBtn.addEventListener('click', ()=>{ racing ? pauseRace() : playRace(); });
+resetBtn.addEventListener('click', newArray);
+
+newArray();
+</script>
+</body>
+</html>
